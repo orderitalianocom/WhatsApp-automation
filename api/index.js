@@ -214,11 +214,14 @@ app.post("/api/send/template", dashboardAuth, async (req, res) => {
   } catch (e) { res.status(e.status || 500).json({ error: e.message, meta: e.meta || null }); }
 });
 
-// Local dev only: on Vercel, files under /public are served automatically
-// and this module is used purely as a serverless function (no app.listen()).
+// Always serve the static dashboard + SPA fallback.
+// On Vercel, vercel.json rewrites forward every request into this single
+// function, so static files must be served here rather than relying on
+// Vercel's separate static asset pipeline.
+app.use(express.static(path.join(__dirname, "..", "public")));
+app.get("*", (req, res) => res.sendFile(path.join(__dirname, "..", "public", "index.html")));
+
 if (!env.VERCEL) {
-  app.use(express.static(path.join(__dirname, "..", "public")));
-  app.get("*", (req, res) => res.sendFile(path.join(__dirname, "..", "public", "index.html")));
   const port = Number(env.PORT || 3000);
   app.listen(port, () => console.log(`RakibFlow Inbox: http://localhost:${port}`));
 }
