@@ -26,7 +26,8 @@ function dashboardAuth(req, res, next) {
 }
 
 // Shared-secret auth for calls coming *from* n8n (so n8n never needs the
-// dashboard password or the raw Meta access token).
+// dashboard password or the raw Meta access token). Only needed if n8n
+// chooses to call back into this app instead of talking to Supabase/Meta directly.
 function n8nAuth(req, res, next) {
   const secret = env.N8N_SHARED_SECRET;
   if (!secret) return res.status(500).json({ error: "N8N_SHARED_SECRET is not configured on the server" });
@@ -102,23 +103,6 @@ async function graphSend(payload) {
   return data;
 }
 
-// Forward an inbound message to n8n so it can run the chatbot flow.
-// Fire-and-forget: never let an n8n outage block the Meta webhook response.
-async function forwardToN8n({ conversationId, waId, name, type, text, timestamp, waMessageId }) {
-  if (!env.N8N_WEBHOOK_URL) return;
-  try {
-    await fetch(env.N8N_WEBHOOK_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        conversationId, waId, name, type, text, timestamp, waMessageId
-      })
-    });
-  } catch (e) {
-    console.error("Failed to forward message to n8n:", e.message);
-  }
-}
-
 /* Webhook verification */
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
@@ -153,14 +137,12 @@ app.post("/webhook", async (req, res) => {
             type, body: text, mediaId, status: "received", timestamp: stamp, raw: m
           });
 
-          // Only hand the message to the n8n bot flow while a human agent
-          // hasn't taken over this conversation (conversations.bot_enabled).
-          if (conv.bot_enabled !== false) {
-            await forwardToN8n({
-              conversationId: conv.id, waId, name: profileNames.get(waId) || null,
-              type, text, timestamp: stamp, waMessageId: m.id
-            });
-          }
+          // NOTE: n8n now owns the bot flow end-to-end and receives inbound
+          // messages directly from Meta's webhook (see DEPLOYMENT.md), so this
+          // endpoint no longer forwards to n8n. It's kept only as a legacy
+          // fallback / manual-inbox recorder; saveMessage() is idempotent on
+          // wa_message_id, so it's safe even if both Meta destinations are
+          // still configured during migration.
         }
         for (const s of value.statuses || []) {
           const status = s.status;
@@ -203,7 +185,7 @@ app.get("/api/conversations/:id/messages", dashboardAuth, async (req, res) => {
 });
 
 // Toggle bot control for a conversation. When bot_enabled is turned off,
-// the human agent has taken over and inbound messages stop being sent to n8n.
+// the human agent has taken over and n8n should stop auto-replying here.
 app.post("/api/conversations/:id/bot", dashboardAuth, async (req, res) => {
   const { enabled } = req.body;
   if (typeof enabled !== "boolean") return res.status(400).json({ error: "enabled (boolean) is required" });
@@ -236,7 +218,9 @@ app.post("/api/send/text", dashboardAuth, async (req, res) => {
       conversationId, waMessageId: messageId, direction: "out", type: "text",
       body: text.trim(), status: "sent", timestamp: now(), raw: data
     });
-    await supabase.from("conversations").update({ last_message_at: now() }).eq("id", conversationId);
+    // A human agent just replied by hand: turn the bot off for this
+    // conversation so n8n stops auto-replying and doesn't collide with the agent.
+    await supabase.from("conversations").update({ last_message_at: now(), bot_enabled: false }).eq("id", conversationId);
     res.json({ ok: true, data });
   } catch (e) {
     console.error(e);
@@ -266,10 +250,9 @@ app.post("/api/send/template", dashboardAuth, async (req, res) => {
   } catch (e) { res.status(e.status || 500).json({ error: e.message, meta: e.meta || null }); }
 });
 
-// Called by the n8n bot flow (not the dashboard) to send a WhatsApp reply.
-// Protected by a shared secret instead of the dashboard password so n8n
-// never needs the human-agent credentials, and the Meta access token stays
-// only in this backend.
+// Optional convenience endpoint if n8n prefers routing sends through this
+// backend (keeps WHATSAPP_ACCESS_TOKEN in one place) instead of calling the
+// Meta Graph API directly with its own copy of the token.
 app.post("/api/n8n/send", n8nAuth, async (req, res) => {
   try {
     const { conversationId, text } = req.body;
@@ -297,8 +280,8 @@ app.post("/api/n8n/send", n8nAuth, async (req, res) => {
   }
 });
 
-// Called by the n8n bot flow to hand a conversation over to a human agent
-// (e.g. the customer asked for a human, or the bot couldn't understand).
+// Optional convenience endpoint for n8n to flag a human handoff. n8n can also
+// just update conversations.bot_enabled directly via a Supabase node instead.
 app.post("/api/n8n/handoff", n8nAuth, async (req, res) => {
   const { conversationId } = req.body;
   if (!conversationId) return res.status(400).json({ error: "conversationId is required" });
