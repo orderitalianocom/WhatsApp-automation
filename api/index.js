@@ -25,6 +25,16 @@ function dashboardAuth(req, res, next) {
   return res.status(401).json({ error: "Dashboard authentication required" });
 }
 
+// Shared-secret auth for calls coming *from* n8n (so n8n never needs the
+// dashboard password or the raw Meta access token).
+function n8nAuth(req, res, next) {
+  const secret = env.N8N_SHARED_SECRET;
+  if (!secret) return res.status(500).json({ error: "N8N_SHARED_SECRET is not configured on the server" });
+  const supplied = req.get("x-n8n-secret");
+  if (supplied === secret) return next();
+  return res.status(401).json({ error: "Invalid or missing x-n8n-secret header" });
+}
+
 async function upsertContact(waId, name = null) {
   const t = now();
   const { data: existing } = await supabase.from("contacts").select("*").eq("wa_id", waId).maybeSingle();
@@ -92,6 +102,23 @@ async function graphSend(payload) {
   return data;
 }
 
+// Forward an inbound message to n8n so it can run the chatbot flow.
+// Fire-and-forget: never let an n8n outage block the Meta webhook response.
+async function forwardToN8n({ conversationId, waId, name, type, text, timestamp, waMessageId }) {
+  if (!env.N8N_WEBHOOK_URL) return;
+  try {
+    await fetch(env.N8N_WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        conversationId, waId, name, type, text, timestamp, waMessageId
+      })
+    });
+  } catch (e) {
+    console.error("Failed to forward message to n8n:", e.message);
+  }
+}
+
 /* Webhook verification */
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
@@ -125,6 +152,15 @@ app.post("/webhook", async (req, res) => {
             conversationId: conv.id, waMessageId: m.id, direction: "in",
             type, body: text, mediaId, status: "received", timestamp: stamp, raw: m
           });
+
+          // Only hand the message to the n8n bot flow while a human agent
+          // hasn't taken over this conversation (conversations.bot_enabled).
+          if (conv.bot_enabled !== false) {
+            await forwardToN8n({
+              conversationId: conv.id, waId, name: profileNames.get(waId) || null,
+              type, text, timestamp: stamp, waMessageId: m.id
+            });
+          }
         }
         for (const s of value.statuses || []) {
           const status = s.status;
@@ -164,6 +200,22 @@ app.get("/api/conversations/:id/messages", dashboardAuth, async (req, res) => {
   if (error) return res.status(500).json({ error: error.message });
   await supabase.from("conversations").update({ unread_count: 0 }).eq("id", req.params.id);
   res.json(data);
+});
+
+// Toggle bot control for a conversation. When bot_enabled is turned off,
+// the human agent has taken over and inbound messages stop being sent to n8n.
+app.post("/api/conversations/:id/bot", dashboardAuth, async (req, res) => {
+  const { enabled } = req.body;
+  if (typeof enabled !== "boolean") return res.status(400).json({ error: "enabled (boolean) is required" });
+  const { data, error } = await supabase
+    .from("conversations")
+    .update({ bot_enabled: enabled })
+    .eq("id", req.params.id)
+    .select()
+    .maybeSingle();
+  if (error) return res.status(500).json({ error: error.message });
+  if (!data) return res.status(404).json({ error: "Conversation not found" });
+  res.json({ ok: true, conversation: data });
 });
 
 app.post("/api/send/text", dashboardAuth, async (req, res) => {
@@ -212,6 +264,53 @@ app.post("/api/send/template", dashboardAuth, async (req, res) => {
     await supabase.from("conversations").update({ last_message_at: now() }).eq("id", conversationId);
     res.json({ ok: true, data });
   } catch (e) { res.status(e.status || 500).json({ error: e.message, meta: e.meta || null }); }
+});
+
+// Called by the n8n bot flow (not the dashboard) to send a WhatsApp reply.
+// Protected by a shared secret instead of the dashboard password so n8n
+// never needs the human-agent credentials, and the Meta access token stays
+// only in this backend.
+app.post("/api/n8n/send", n8nAuth, async (req, res) => {
+  try {
+    const { conversationId, text } = req.body;
+    if (!conversationId || !text?.trim()) return res.status(400).json({ error: "conversationId and text are required" });
+    const { data: conv } = await supabase
+      .from("conversations")
+      .select("*, contacts!inner(wa_id)")
+      .eq("id", conversationId).maybeSingle();
+    if (!conv) return res.status(404).json({ error: "Conversation not found" });
+    if (conv.bot_enabled === false) return res.status(409).json({ error: "Bot is disabled for this conversation (human agent has taken over)" });
+
+    const data = await graphSend({
+      to: conv.contacts.wa_id, type: "text", text: { preview_url: false, body: text.trim() }
+    });
+    const messageId = data?.messages?.[0]?.id || null;
+    await saveMessage({
+      conversationId, waMessageId: messageId, direction: "out", type: "text",
+      body: text.trim(), status: "sent", timestamp: now(), raw: data
+    });
+    await supabase.from("conversations").update({ last_message_at: now() }).eq("id", conversationId);
+    res.json({ ok: true, data });
+  } catch (e) {
+    console.error(e);
+    res.status(e.status || 500).json({ error: e.message, meta: e.meta || null });
+  }
+});
+
+// Called by the n8n bot flow to hand a conversation over to a human agent
+// (e.g. the customer asked for a human, or the bot couldn't understand).
+app.post("/api/n8n/handoff", n8nAuth, async (req, res) => {
+  const { conversationId } = req.body;
+  if (!conversationId) return res.status(400).json({ error: "conversationId is required" });
+  const { data, error } = await supabase
+    .from("conversations")
+    .update({ bot_enabled: false })
+    .eq("id", conversationId)
+    .select()
+    .maybeSingle();
+  if (error) return res.status(500).json({ error: error.message });
+  if (!data) return res.status(404).json({ error: "Conversation not found" });
+  res.json({ ok: true, conversation: data });
 });
 
 // Always serve the static dashboard + SPA fallback.
