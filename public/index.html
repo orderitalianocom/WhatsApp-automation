@@ -9,7 +9,7 @@
   --bg-app:#F0F2F5; --bg-panel:#FFFFFF; --bg-chat:#EFEAE2;
   --line:#E9EDEF; --text:#111B21; --muted:#667781; --muted2:#8696A0;
   --bubble-in:#FFFFFF; --bubble-out:#D9FDD3; --warn:#B8860B; --warn-bg:#FFF7E0;
-  --read-tick:#53BDEB;
+  --read-tick:#53BDEB; --bot-on:#00A884; --bot-off:#B8860B;
   --shadow-sm:0 1px 2px rgba(11,20,26,.08); --shadow-md:0 2px 10px rgba(11,20,26,.10);
 }
 *{box-sizing:border-box}
@@ -47,14 +47,25 @@ button,input,textarea{font:inherit}
 .status{font-size:10.5px;margin-top:5px;color:var(--teal-panel);font-weight:600}
 .status.warn{color:var(--warn)}
 .unread-dot{background:var(--teal-panel);color:#fff;font-size:10px;font-weight:700;border-radius:999px;padding:1px 7px;flex:none;align-self:flex-start}
+.bot-chip{font-size:9.5px;font-weight:700;padding:1px 7px;border-radius:999px;margin-top:5px;display:inline-block}
+.bot-chip.on{background:var(--teal-tint);color:var(--teal-deep)}
+.bot-chip.off{background:var(--warn-bg);color:var(--warn)}
 
 .main{display:flex;flex-direction:column;min-width:0;background:var(--bg-chat)}
 .top{height:68px;flex:none;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;padding:0 22px;background:var(--bg-panel);box-shadow:var(--shadow-sm)}
 .person{display:flex;align-items:center;gap:11px}
 .person strong{font-size:14.5px;color:var(--text)}
 .person small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+.actions{display:flex;align-items:center;gap:6px}
 .actions button{background:transparent;border:0;color:var(--muted2);border-radius:9px;padding:8px;margin-left:2px;font-size:16px;cursor:pointer}
 .actions button:hover{background:var(--bg-app);color:var(--teal-deep)}
+.bot-toggle{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;background:#fff;transition:background .15s}
+.bot-toggle .dot{width:8px;height:8px;border-radius:50%}
+.bot-toggle.on{color:var(--teal-deep)}
+.bot-toggle.on .dot{background:var(--teal-panel)}
+.bot-toggle.off{color:var(--warn)}
+.bot-toggle.off .dot{background:var(--warn)}
+.bot-toggle:disabled{opacity:.5;cursor:default}
 .window{padding:8px 22px;border-bottom:1px solid var(--line);color:var(--muted);font-size:11.5px;background:var(--teal-tint)}
 .window.warn{background:var(--warn-bg);color:#8a6a12}
 .window b{color:var(--teal-deep)}
@@ -97,6 +108,7 @@ button,input,textarea{font:inherit}
  .list-close{display:inline-flex;align-items:center;justify-content:center;background:transparent;border:0;color:var(--muted2);font-size:20px;border-radius:9px;padding:6px 10px;cursor:pointer;margin-right:6px}
  .head{display:flex;align-items:center;gap:10px}
  .top{padding:0 14px}
+ .bot-toggle span.label{display:none}
  .messages,.composer{padding-left:12px;padding-right:12px}
  .msg{max-width:86%}
 }
@@ -112,10 +124,10 @@ button,input,textarea{font:inherit}
 <div id="chats"><div class="empty">Loading conversations…</div></div>
 </aside>
 <main class="main">
-<header class="top"><div class="person"><button class="menu-btn" id="menuBtn" title="Conversations">☰</button><div id="avatar" class="avatar">RF</div><div><strong id="person">Select a conversation</strong><small id="phone">WhatsApp</small></div></div><div class="actions"><button title="More">⋯</button><button title="Info">ⓘ</button></div></header>
+<header class="top"><div class="person"><button class="menu-btn" id="menuBtn" title="Conversations">☰</button><div id="avatar" class="avatar">RF</div><div><strong id="person">Select a conversation</strong><small id="phone">WhatsApp</small></div></div><div class="actions"><button id="botToggle" class="bot-toggle on" disabled><span class="dot"></span><span class="label">Bot: ON</span></button><button title="More">⋯</button><button title="Info">ⓘ</button></div></header>
 <div class="window" id="window">Select a customer to start.</div>
 <section class="messages" id="messages"><div class="empty">No conversation selected</div></section>
-<footer class="composer"><div class="compose"><input id="text" placeholder="Type your message…" disabled><button id="send" class="send" disabled>➤</button></div><div class="hint">Messages are sent through your server-side Meta Cloud API token.</div></footer>
+<footer class="composer"><div class="compose"><input id="text" placeholder="Type your message…" disabled><button id="send" class="send" disabled>➤</button></div><div class="hint">Messages are sent through your server-side Meta Cloud API token. Turn the bot off above to reply yourself.</div></footer>
 </main></div>
 <script>
 let conversations=[], selected=null;
@@ -152,11 +164,33 @@ function renderChats(){
  const arr=conversations.filter(c=>(c.name||c.wa_id).toLowerCase().includes(q)||(c.preview||"").toLowerCase().includes(q));
  $("chats").innerHTML=arr.length?arr.map(c=>{
   const stale=c.last_message_at && Date.now()-new Date(c.last_message_at).getTime()>86400000;
+  const botOn=c.bot_enabled!==false;
   return `<div class="chat ${selected?.conversation_id===c.conversation_id?"sel":""}" data-id="${c.conversation_id}">
  <div class="avatar">${esc(initials(c.name||c.wa_id))}</div><div class="chatbody"><div class="row"><span class="name">${esc(c.name||c.wa_id)}</span><span class="time">${esc(time(c.last_message_at))}</span></div>
- <div class="preview">${esc(c.preview||"No messages")}</div><div class="status ${stale?"warn":""}">${stale?"Template required":"● 24h window open"}</div></div>${c.unread_count?`<span class="unread-dot">${c.unread_count}</span>`:""}</div>`;
+ <div class="preview">${esc(c.preview||"No messages")}</div><div class="status ${stale?"warn":""}">${stale?"Template required":"● 24h window open"}</div><span class="bot-chip ${botOn?"on":"off"}">${botOn?"🤖 Bot":"🧑 Human"}</span></div>${c.unread_count?`<span class="unread-dot">${c.unread_count}</span>`:""}</div>`;
  }).join(""):'<div class="empty">No conversations</div>';
  document.querySelectorAll(".chat").forEach(x=>x.onclick=()=>select(Number(x.dataset.id)));
+}
+function renderBotToggle(){
+ const btn=$("botToggle");
+ if(!selected){btn.disabled=true;btn.className="bot-toggle on";btn.querySelector(".label").textContent="Bot: ON";return}
+ btn.disabled=false;
+ const on=selected.bot_enabled!==false;
+ btn.className="bot-toggle "+(on?"on":"off");
+ btn.querySelector(".label").textContent=on?"Bot: ON":"Bot: OFF (you reply)";
+}
+async function toggleBot(){
+ if(!selected)return;
+ const next=!(selected.bot_enabled!==false);
+ $("botToggle").disabled=true;
+ try{
+  const res=await api(`/api/conversations/${selected.conversation_id}/bot`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({enabled:next})});
+  selected.bot_enabled=res.conversation.bot_enabled;
+  const idx=conversations.findIndex(c=>c.conversation_id===selected.conversation_id);
+  if(idx>-1) conversations[idx].bot_enabled=res.conversation.bot_enabled;
+  renderBotToggle();renderChats();
+ }catch(e){alert(e.message)}
+ finally{$("botToggle").disabled=false}
 }
 async function select(id){
  selected=conversations.find(c=>c.conversation_id===id); if(!selected)return; renderChats();
@@ -167,6 +201,7 @@ async function select(id){
  $("window").className="window"+(stale?" warn":"");
  $("window").innerHTML=stale?`Customer last message: <b>${esc(time(selected.last_message_at))}</b> · Template required`:`Customer last message: <b>${esc(time(selected.last_message_at))}</b> · Free-form reply window is open`;
  $("text").disabled=false;$("send").disabled=false;
+ renderBotToggle();
  try{const msgs=await api(`/api/conversations/${id}/messages`);$("messages").innerHTML='<div class="day">CONVERSATION</div>'+msgs.map(m=>`<div class="msg ${m.direction==="out"?"out":"in"}">${esc(m.body)}<span class="meta">${esc(time(m.timestamp))}${m.direction==="out"?tick(m.status):""}</span></div>`).join("");$("messages").scrollTop=$("messages").scrollHeight;load()}
  catch(e){$("messages").innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
 }
@@ -180,6 +215,7 @@ async function send(){
 $("send").onclick=send;$("text").onkeydown=e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}};$("search").oninput=renderChats;
 $("menuBtn").onclick=()=>$("list").classList.add("open");
 $("listClose").onclick=()=>$("list").classList.remove("open");
+$("botToggle").onclick=toggleBot;
 load();setInterval(load,5000);
 </script>
 </body></html>
