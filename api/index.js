@@ -1,0 +1,226 @@
+import express from "express";
+import dotenv from "dotenv";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { createClient } from "@supabase/supabase-js";
+
+dotenv.config();
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const env = process.env;
+
+const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+  auth: { persistSession: false }
+});
+
+const app = express();
+app.use(express.json({ limit: "10mb" }));
+
+const now = () => new Date().toISOString();
+
+function dashboardAuth(req, res, next) {
+  const password = env.DASHBOARD_PASSWORD;
+  if (!password) return next();
+  const supplied = req.get("x-dashboard-password") || req.query.password;
+  if (supplied === password) return next();
+  return res.status(401).json({ error: "Dashboard authentication required" });
+}
+
+async function upsertContact(waId, name = null) {
+  const t = now();
+  const { data: existing } = await supabase.from("contacts").select("*").eq("wa_id", waId).maybeSingle();
+  if (existing) {
+    const { data } = await supabase.from("contacts")
+      .update({ name: name ?? existing.name, phone: waId, updated_at: t })
+      .eq("id", existing.id).select().single();
+    return data;
+  }
+  const { data } = await supabase.from("contacts")
+    .insert({ wa_id: waId, name, phone: waId, created_at: t, updated_at: t })
+    .select().single();
+  return data;
+}
+
+async function upsertConversation(contactId, lastMessageAt, unread = false) {
+  const { data: existing } = await supabase.from("conversations").select("*").eq("contact_id", contactId).maybeSingle();
+  if (!existing) {
+    const { data } = await supabase.from("conversations")
+      .insert({ contact_id: contactId, last_message_at: lastMessageAt, unread_count: unread ? 1 : 0 })
+      .select().single();
+    return data;
+  }
+  const { data } = await supabase.from("conversations")
+    .update({ last_message_at: lastMessageAt, unread_count: existing.unread_count + (unread ? 1 : 0) })
+    .eq("id", existing.id).select().single();
+  return data;
+}
+
+async function saveMessage({ conversationId, waMessageId = null, direction, type = "text", body = "", mediaId = null, status = "received", timestamp = now(), raw = null }) {
+  if (waMessageId) {
+    const { data: existing } = await supabase.from("messages").select("id").eq("wa_message_id", waMessageId).maybeSingle();
+    if (existing) return existing.id;
+  }
+  const { data } = await supabase.from("messages").insert({
+    conversation_id: conversationId, wa_message_id: waMessageId, direction, type,
+    body, media_id: mediaId, status, timestamp, raw_json: raw
+  }).select("id").single();
+  return data?.id;
+}
+
+function isoFromWaTimestamp(ts) {
+  const n = Number(ts);
+  return Number.isFinite(n) ? new Date(n * 1000).toISOString() : now();
+}
+
+async function graphSend(payload) {
+  if (!env.WHATSAPP_ACCESS_TOKEN || !env.PHONE_NUMBER_ID)
+    throw new Error("WHATSAPP_ACCESS_TOKEN and PHONE_NUMBER_ID are not configured");
+  const url = `https://graph.facebook.com/${env.GRAPH_VERSION || "v23.0"}/${env.PHONE_NUMBER_ID}/messages`;
+  const r = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${env.WHATSAPP_ACCESS_TOKEN}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ messaging_product: "whatsapp", ...payload })
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const err = new Error(data?.error?.message || "Meta API request failed");
+    err.status = r.status; err.meta = data;
+    throw err;
+  }
+  return data;
+}
+
+/* Webhook verification */
+app.get("/webhook", (req, res) => {
+  const mode = req.query["hub.mode"];
+  const token = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+  if (mode === "subscribe" && token === env.META_VERIFY_TOKEN)
+    return res.status(200).send(challenge);
+  return res.sendStatus(403);
+});
+
+/* Webhook receiver: stores inbound messages and delivery/read statuses. */
+app.post("/webhook", async (req, res) => {
+  try {
+    const body = req.body;
+    if (body?.object !== "whatsapp_business_account") return res.sendStatus(200);
+    for (const entry of body.entry || []) {
+      for (const change of entry.changes || []) {
+        const value = change.value || {};
+        const contacts = value.contacts || [];
+        const profileNames = new Map(contacts.map(c => [c.wa_id, c.profile?.name]));
+        for (const m of value.messages || []) {
+          const waId = m.from;
+          const contact = await upsertContact(waId, profileNames.get(waId) || null);
+          const stamp = isoFromWaTimestamp(m.timestamp);
+          const conv = await upsertConversation(contact.id, stamp, true);
+          let type = m.type || "unknown", text = "", mediaId = null;
+          if (type === "text") text = m.text?.body || "";
+          else if (m[type]?.id) { mediaId = m[type].id; text = m[type]?.caption || `[${type}]`; }
+          else if (m[type]?.body) text = m[type].body;
+          await saveMessage({
+            conversationId: conv.id, waMessageId: m.id, direction: "in",
+            type, body: text, mediaId, status: "received", timestamp: stamp, raw: m
+          });
+        }
+        for (const s of value.statuses || []) {
+          const status = s.status;
+          if (s.id) await supabase.from("messages").update({ status }).eq("wa_message_id", s.id);
+        }
+      }
+    }
+    return res.sendStatus(200);
+  } catch (e) {
+    console.error("Webhook error", e);
+    return res.sendStatus(200);
+  }
+});
+
+/* API */
+app.get("/api/me", dashboardAuth, (req, res) => res.json({
+  ok: true, configured: Boolean(env.WHATSAPP_ACCESS_TOKEN && env.PHONE_NUMBER_ID),
+  phoneNumberId: env.PHONE_NUMBER_ID || null
+}));
+
+app.get("/api/conversations", dashboardAuth, async (req, res) => {
+  const { data, error } = await supabase
+    .from("conversation_list")
+    .select("*")
+    .order("last_message_at", { ascending: false, nullsFirst: false })
+    .order("conversation_id", { ascending: false });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.get("/api/conversations/:id/messages", dashboardAuth, async (req, res) => {
+  const { data, error } = await supabase
+    .from("messages")
+    .select("id,wa_message_id,direction,type,body,media_id,status,timestamp")
+    .eq("conversation_id", req.params.id)
+    .order("id", { ascending: true });
+  if (error) return res.status(500).json({ error: error.message });
+  await supabase.from("conversations").update({ unread_count: 0 }).eq("id", req.params.id);
+  res.json(data);
+});
+
+app.post("/api/send/text", dashboardAuth, async (req, res) => {
+  try {
+    const { conversationId, text } = req.body;
+    if (!conversationId || !text?.trim()) return res.status(400).json({ error: "conversationId and text are required" });
+    const { data: conv } = await supabase
+      .from("conversations")
+      .select("*, contacts!inner(wa_id)")
+      .eq("id", conversationId).maybeSingle();
+    if (!conv) return res.status(404).json({ error: "Conversation not found" });
+
+    const data = await graphSend({
+      to: conv.contacts.wa_id, type: "text", text: { preview_url: false, body: text.trim() }
+    });
+    const messageId = data?.messages?.[0]?.id || null;
+    await saveMessage({
+      conversationId, waMessageId: messageId, direction: "out", type: "text",
+      body: text.trim(), status: "sent", timestamp: now(), raw: data
+    });
+    await supabase.from("conversations").update({ last_message_at: now() }).eq("id", conversationId);
+    res.json({ ok: true, data });
+  } catch (e) {
+    console.error(e);
+    res.status(e.status || 500).json({ error: e.message, meta: e.meta || null });
+  }
+});
+
+app.post("/api/send/template", dashboardAuth, async (req, res) => {
+  try {
+    const { conversationId, name, languageCode = "en_US", components = [] } = req.body;
+    if (!conversationId || !name) return res.status(400).json({ error: "conversationId and template name are required" });
+    const { data: conv } = await supabase
+      .from("conversations")
+      .select("*, contacts!inner(wa_id)")
+      .eq("id", conversationId).maybeSingle();
+    if (!conv) return res.status(404).json({ error: "Conversation not found" });
+    const data = await graphSend({
+      to: conv.contacts.wa_id, type: "template",
+      template: { name, language: { code: languageCode }, components }
+    });
+    await saveMessage({
+      conversationId, waMessageId: data?.messages?.[0]?.id || null, direction: "out",
+      type: "template", body: `Template: ${name}`, status: "sent", timestamp: now(), raw: data
+    });
+    await supabase.from("conversations").update({ last_message_at: now() }).eq("id", conversationId);
+    res.json({ ok: true, data });
+  } catch (e) { res.status(e.status || 500).json({ error: e.message, meta: e.meta || null }); }
+});
+
+// Local dev only: on Vercel, files under /public are served automatically
+// and this module is used purely as a serverless function (no app.listen()).
+if (!env.VERCEL) {
+  app.use(express.static(path.join(__dirname, "..", "public")));
+  app.get("*", (req, res) => res.sendFile(path.join(__dirname, "..", "public", "index.html")));
+  const port = Number(env.PORT || 3000);
+  app.listen(port, () => console.log(`RakibFlow Inbox: http://localhost:${port}`));
+}
+
+export default app;
