@@ -218,8 +218,10 @@ app.post("/api/send/template", dashboardAuth, async (req, res) => {
 // On Vercel, vercel.json rewrites forward every request into this single
 // function, so static files must be served here rather than relying on
 // Vercel's separate static asset pipeline.
+// Note: Express 5 (path-to-regexp v8) no longer accepts a bare "*" pattern,
+// so the SPA fallback is a plain middleware with no path pattern.
 app.use(express.static(path.join(__dirname, "..", "public")));
-app.get("*", (req, res) => res.sendFile(path.join(__dirname, "..", "public", "index.html")));
+app.use((req, res) => res.sendFile(path.join(__dirname, "..", "public", "index.html")));
 
 if (!env.VERCEL) {
   const port = Number(env.PORT || 3000);
