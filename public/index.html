@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RakibFlow · WhatsApp Inbox</title>
+<style>
+:root{
+  --teal-deep:#008069; --teal-panel:#00A884; --teal-tint:#e7f8f3;
+  --bg-app:#F0F2F5; --bg-panel:#FFFFFF; --bg-chat:#EFEAE2;
+  --line:#E9EDEF; --text:#111B21; --muted:#667781; --muted2:#8696A0;
+  --bubble-in:#FFFFFF; --bubble-out:#D9FDD3; --warn:#B8860B; --warn-bg:#FFF7E0;
+  --read-tick:#53BDEB;
+  --shadow-sm:0 1px 2px rgba(11,20,26,.08); --shadow-md:0 2px 10px rgba(11,20,26,.10);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg-app);color:var(--text);font-family:"Segoe UI",Helvetica,Arial,ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+button,input,textarea{font:inherit}
+.app{height:100vh;display:grid;grid-template-columns:64px 340px 1fr;overflow:hidden}
+
+.rail{background:var(--bg-panel);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;padding:16px 8px}
+.logo{width:38px;height:38px;border-radius:11px;background:linear-gradient(155deg,var(--teal-panel),var(--teal-deep));color:#fff;display:grid;place-items:center;font-weight:800;font-size:15px;margin-bottom:26px;box-shadow:var(--shadow-sm)}
+.rail button{width:40px;height:40px;border:0;background:transparent;color:var(--muted2);border-radius:11px;margin:3px;font-size:16px;cursor:pointer;transition:background .15s,color .15s}
+.rail button:hover{background:var(--teal-tint);color:var(--teal-deep)}
+.rail button.active{background:var(--teal-tint);color:var(--teal-deep)}
+.push{margin-top:auto}
+
+.list{background:var(--bg-panel);border-right:1px solid var(--line);overflow:hidden;display:flex;flex-direction:column}
+.head{padding:20px 20px 14px;display:flex;align-items:baseline;justify-content:space-between}
+.brand{font-size:9.5px;letter-spacing:.14em;color:var(--muted2);font-weight:700}
+.title{font-size:22px;font-weight:750;margin-top:2px;color:var(--text)}
+.search-wrap{margin:0 16px 10px}
+.search{width:100%;background:var(--bg-app);color:var(--text);border:1px solid transparent;border-radius:20px;padding:9px 14px;outline:0;font-size:13px}
+.search:focus{border-color:var(--teal-panel);background:#fff}
+.tabs{display:flex;gap:6px;padding:0 16px 12px}
+.tab{border:1px solid var(--line);background:#fff;color:var(--muted);border-radius:999px;padding:5px 12px;font-size:11.5px;cursor:pointer}
+.tab.active{background:var(--teal-tint);color:var(--teal-deep);border-color:var(--teal-tint);font-weight:700}
+#chats{overflow-y:auto;flex:1}
+.chat{display:flex;gap:11px;padding:12px 16px;border-top:1px solid var(--line);cursor:pointer;transition:background .12s}
+.chat:hover{background:#F5F6F6}
+.chat.sel{background:var(--teal-tint)}
+.avatar{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(155deg,#c9ede2,#9fd8c6);color:#0a4a3c;font-size:13px;font-weight:750;flex:none}
+.chatbody{min-width:0;flex:1}
+.row{display:flex;justify-content:space-between;gap:7px}
+.name{font-size:14.5px;font-weight:600;color:var(--text)}
+.time{font-size:10.5px;color:var(--muted2)}
+.preview{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:3px}
+.status{font-size:10.5px;margin-top:5px;color:var(--teal-panel);font-weight:600}
+.status.warn{color:var(--warn)}
+.unread-dot{background:var(--teal-panel);color:#fff;font-size:10px;font-weight:700;border-radius:999px;padding:1px 7px;flex:none;align-self:flex-start}
+
+.main{display:flex;flex-direction:column;min-width:0;background:var(--bg-chat)}
+.top{height:68px;flex:none;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;padding:0 22px;background:var(--bg-panel);box-shadow:var(--shadow-sm)}
+.person{display:flex;align-items:center;gap:11px}
+.person strong{font-size:14.5px;color:var(--text)}
+.person small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+.actions button{background:transparent;border:0;color:var(--muted2);border-radius:9px;padding:8px;margin-left:2px;font-size:16px;cursor:pointer}
+.actions button:hover{background:var(--bg-app);color:var(--teal-deep)}
+.window{padding:8px 22px;border-bottom:1px solid var(--line);color:var(--muted);font-size:11.5px;background:var(--teal-tint)}
+.window.warn{background:var(--warn-bg);color:#8a6a12}
+.window b{color:var(--teal-deep)}
+.window.warn b{color:var(--warn)}
+.messages{flex:1;overflow-y:auto;padding:24px 8%;display:flex;flex-direction:column;gap:2px;
+  background-color:var(--bg-chat);
+  background-image:radial-gradient(rgba(0,0,0,.035) 1px, transparent 1px);
+  background-size:18px 18px;}
+.day{align-self:center;background:#fff;color:var(--muted);font-size:11px;padding:5px 12px;border-radius:8px;margin:8px 0 14px;box-shadow:var(--shadow-sm)}
+.msg{max-width:min(560px,72%);padding:7px 9px 8px 10px;border-radius:9px;font-size:13.6px;line-height:1.4;white-space:pre-wrap;margin-bottom:4px;position:relative;box-shadow:var(--shadow-sm)}
+.in{align-self:flex-start;background:var(--bubble-in);border-top-left-radius:2px}
+.out{align-self:flex-end;background:var(--bubble-out);border-top-right-radius:2px}
+.meta{display:flex;justify-content:flex-end;align-items:center;gap:3px;color:var(--muted2);font-size:10px;margin-top:3px}
+.meta .tick{color:var(--muted2)}
+.meta .tick.read{color:var(--read-tick)}
+
+.composer{padding:12px 8%;border-top:1px solid var(--line);background:var(--bg-panel)}
+.compose{display:flex;align-items:center;gap:9px}
+.compose input{flex:1;background:var(--bg-app);border:1px solid transparent;color:var(--text);border-radius:22px;padding:11px 16px;outline:0;font-size:13.5px}
+.compose input:focus{border-color:var(--teal-panel);background:#fff}
+.send{width:42px;height:42px;flex:none;border:0;border-radius:50%;background:var(--teal-panel);color:#fff;font-size:16px;cursor:pointer;display:grid;place-items:center;box-shadow:var(--shadow-sm);transition:background .15s,transform .1s}
+.send:hover{background:var(--teal-deep)}
+.send:active{transform:scale(.94)}
+.send:disabled{background:#c8cdd1;cursor:default}
+.hint{font-size:9.5px;color:var(--muted2);margin-top:6px;text-align:center}
+.empty{color:var(--muted2);text-align:center;margin:auto;font-size:13px}
+
+.menu-btn{display:none;background:transparent;border:0;color:var(--muted2);font-size:18px;border-radius:9px;padding:8px;cursor:pointer;margin-right:4px}
+.menu-btn:hover{background:var(--bg-app);color:var(--teal-deep)}
+.list-close{display:none}
+
+@media(max-width:850px){.app{grid-template-columns:56px 290px 1fr}.messages,.composer{padding-left:5%;padding-right:5%}}
+@media(max-width:650px){
+ .app{grid-template-columns:1fr}
+ .rail{display:none}
+ .list{display:none}
+ .list.open{display:flex;position:fixed;inset:0;z-index:20;width:100%;grid-column:1}
+ .main{grid-column:1}
+ .menu-btn{display:inline-flex;align-items:center;justify-content:center}
+ .list-close{display:inline-flex;align-items:center;justify-content:center;background:transparent;border:0;color:var(--muted2);font-size:20px;border-radius:9px;padding:6px 10px;cursor:pointer;margin-right:6px}
+ .head{display:flex;align-items:center;gap:10px}
+ .top{padding:0 14px}
+ .messages,.composer{padding-left:12px;padding-right:12px}
+ .msg{max-width:86%}
+}
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="rail"><div class="logo">R</div><button class="active" title="Chats">💬</button><button title="Contacts">👤</button><button title="Broadcasts">📣</button><button title="Reports">📊</button><div class="push"><button title="Settings">⚙️</button></div></aside>
+<aside class="list" id="list">
+<div class="head"><button class="list-close" id="listClose" title="Close">✕</button><div><div class="brand">RAKIBFLOW</div><div class="title">Inbox</div></div></div>
+<div class="search-wrap"><input id="search" class="search" placeholder="Search conversations…"></div>
+<div class="tabs"><button class="tab active">All</button><button class="tab">Unread</button><button class="tab">Open</button></div>
+<div id="chats"><div class="empty">Loading conversations…</div></div>
+</aside>
+<main class="main">
+<header class="top"><div class="person"><button class="menu-btn" id="menuBtn" title="Conversations">☰</button><div id="avatar" class="avatar">RF</div><div><strong id="person">Select a conversation</strong><small id="phone">WhatsApp</small></div></div><div class="actions"><button title="More">⋯</button><button title="Info">ⓘ</button></div></header>
+<div class="window" id="window">Select a customer to start.</div>
+<section class="messages" id="messages"><div class="empty">No conversation selected</div></section>
+<footer class="composer"><div class="compose"><input id="text" placeholder="Type your message…" disabled><button id="send" class="send" disabled>➤</button></div><div class="hint">Messages are sent through your server-side Meta Cloud API token.</div></footer>
+</main></div>
+<script>
+let conversations=[], selected=null;
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function initials(n){return (n||"WA").split(/\s+/).slice(0,2).map(x=>x[0]).join("").toUpperCase()}
+function time(iso){if(!iso)return "";return new Date(iso).toLocaleString([], {hour:"2-digit",minute:"2-digit"})}
+function tick(status){
+ if(status==="read")return '<span class="tick read">✓✓</span>';
+ if(status==="delivered")return '<span class="tick">✓✓</span>';
+ return '<span class="tick">✓</span>';
+}
+function dashPassword(){
+ let p=localStorage.getItem("rf_dash_pw");
+ if(p===null){p=prompt("Dashboard password (leave blank if none was set):")||"";localStorage.setItem("rf_dash_pw",p)}
+ return p;
+}
+async function api(url,opt={}){
+ const pw=dashPassword();
+ const headers={...(opt.headers||{})};
+ if(pw) headers["x-dashboard-password"]=pw;
+ const r=await fetch(url,{...opt,headers});
+ if(r.status===401){localStorage.removeItem("rf_dash_pw");throw new Error("Wrong dashboard password. Refresh the page and try again.")}
+ const d=await r.json().catch(()=>({}));
+ if(!r.ok)throw new Error(d.error||"Request failed");
+ return d;
+}
+async function load(){
+ try{conversations=await api("/api/conversations");renderChats(); if(!selected && conversations.length) select(conversations[0].id)}
+ catch(e){$("chats").innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
+}
+function renderChats(){
+ const q=$("search").value.toLowerCase();
+ const arr=conversations.filter(c=>(c.name||c.wa_id).toLowerCase().includes(q)||(c.preview||"").toLowerCase().includes(q));
+ $("chats").innerHTML=arr.length?arr.map(c=>{
+  const stale=c.last_message_at && Date.now()-new Date(c.last_message_at).getTime()>86400000;
+  return `<div class="chat ${selected?.conversation_id===c.conversation_id?"sel":""}" data-id="${c.conversation_id}">
+ <div class="avatar">${esc(initials(c.name||c.wa_id))}</div><div class="chatbody"><div class="row"><span class="name">${esc(c.name||c.wa_id)}</span><span class="time">${esc(time(c.last_message_at))}</span></div>
+ <div class="preview">${esc(c.preview||"No messages")}</div><div class="status ${stale?"warn":""}">${stale?"Template required":"● 24h window open"}</div></div>${c.unread_count?`<span class="unread-dot">${c.unread_count}</span>`:""}</div>`;
+ }).join(""):'<div class="empty">No conversations</div>';
+ document.querySelectorAll(".chat").forEach(x=>x.onclick=()=>select(Number(x.dataset.id)));
+}
+async function select(id){
+ selected=conversations.find(c=>c.conversation_id===id); if(!selected)return; renderChats();
+ $("list").classList.remove("open");
+ $("person").textContent=selected.name||selected.wa_id;$("phone").textContent="WhatsApp · "+selected.wa_id;$("avatar").textContent=initials(selected.name||selected.wa_id);
+ const age=selected.last_message_at?Date.now()-new Date(selected.last_message_at).getTime():0;
+ const stale=age>86400000;
+ $("window").className="window"+(stale?" warn":"");
+ $("window").innerHTML=stale?`Customer last message: <b>${esc(time(selected.last_message_at))}</b> · Template required`:`Customer last message: <b>${esc(time(selected.last_message_at))}</b> · Free-form reply window is open`;
+ $("text").disabled=false;$("send").disabled=false;
+ try{const msgs=await api(`/api/conversations/${id}/messages`);$("messages").innerHTML='<div class="day">CONVERSATION</div>'+msgs.map(m=>`<div class="msg ${m.direction==="out"?"out":"in"}">${esc(m.body)}<span class="meta">${esc(time(m.timestamp))}${m.direction==="out"?tick(m.status):""}</span></div>`).join("");$("messages").scrollTop=$("messages").scrollHeight;load()}
+ catch(e){$("messages").innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
+}
+async function send(){
+ const text=$("text").value.trim();if(!text||!selected)return;
+ $("send").disabled=true;
+ try{await api("/api/send/text",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({conversationId:selected.conversation_id,text})});$("text").value="";await select(selected.conversation_id)}
+ catch(e){alert(e.message)}
+ finally{$("send").disabled=false}
+}
+$("send").onclick=send;$("text").onkeydown=e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}};$("search").oninput=renderChats;
+$("menuBtn").onclick=()=>$("list").classList.add("open");
+$("listClose").onclick=()=>$("list").classList.remove("open");
+load();setInterval(load,5000);
+</script>
+</body></html>
