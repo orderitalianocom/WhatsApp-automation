@@ -1,9 +1,9 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>RakibFlow · WhatsApp Inbox</title>
-<style>
+&lt;!doctype html&gt;
+&lt;html lang="en"&gt;
+&lt;head&gt;
+&lt;meta charset="utf-8"&gt;&lt;meta name="viewport" content="width=device-width,initial-scale=1"&gt;
+&lt;title&gt;RakibFlow · WhatsApp Inbox&lt;/title&gt;
+&lt;style&gt;
 :root{
   --teal-deep:#008069; --teal-panel:#00A884; --teal-tint:#e7f8f3;
   --bg-app:#F0F2F5; --bg-panel:#FFFFFF; --bg-chat:#EFEAE2;
@@ -15,7 +15,7 @@
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg-app);color:var(--text);font-family:"Segoe UI",Helvetica,Arial,ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
 button,input,textarea{font:inherit}
-.app{height:100vh;display:grid;grid-template-columns:64px 340px 1fr;overflow:hidden}
+.app{height:100vh;height:100dvh;display:grid;grid-template-columns:64px 340px 1fr;overflow:hidden}
 
 .rail{background:var(--bg-panel);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;padding:16px 8px}
 .logo{width:38px;height:38px;border-radius:11px;background:linear-gradient(155deg,var(--teal-panel),var(--teal-deep));color:#fff;display:grid;place-items:center;font-weight:800;font-size:15px;margin-bottom:26px;box-shadow:var(--shadow-sm)}
@@ -51,7 +51,7 @@ button,input,textarea{font:inherit}
 .bot-chip.on{background:var(--teal-tint);color:var(--teal-deep)}
 .bot-chip.off{background:var(--warn-bg);color:var(--warn)}
 
-.main{display:flex;flex-direction:column;min-width:0;background:var(--bg-chat)}
+.main{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--bg-chat)}
 .top{height:68px;flex:none;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;padding:0 22px;background:var(--bg-panel);box-shadow:var(--shadow-sm)}
 .person{display:flex;align-items:center;gap:11px}
 .person strong{font-size:14.5px;color:var(--text)}
@@ -70,7 +70,7 @@ button,input,textarea{font:inherit}
 .window.warn{background:var(--warn-bg);color:#8a6a12}
 .window b{color:var(--teal-deep)}
 .window.warn b{color:var(--warn)}
-.messages{flex:1;overflow-y:auto;padding:24px 8%;display:flex;flex-direction:column;gap:2px;
+.messages{flex:1;min-height:0;overflow-y:auto;padding:24px 8%;display:flex;flex-direction:column;gap:2px;
   background-color:var(--bg-chat);
   background-image:radial-gradient(rgba(0,0,0,.035) 1px, transparent 1px);
   background-size:18px 18px;}
@@ -112,33 +112,33 @@ button,input,textarea{font:inherit}
  .messages,.composer{padding-left:12px;padding-right:12px}
  .msg{max-width:86%}
 }
-</style>
-</head>
-<body>
-<div class="app">
-<aside class="rail"><div class="logo">R</div><button class="active" title="Chats">💬</button><button title="Contacts">👤</button><button title="Broadcasts">📣</button><button title="Reports">📊</button><div class="push"><button title="Settings">⚙️</button></div></aside>
-<aside class="list" id="list">
-<div class="head"><button class="list-close" id="listClose" title="Close">✕</button><div><div class="brand">RAKIBFLOW</div><div class="title">Inbox</div></div></div>
-<div class="search-wrap"><input id="search" class="search" placeholder="Search conversations…"></div>
-<div class="tabs"><button class="tab active">All</button><button class="tab">Unread</button><button class="tab">Open</button></div>
-<div id="chats"><div class="empty">Loading conversations…</div></div>
-</aside>
-<main class="main">
-<header class="top"><div class="person"><button class="menu-btn" id="menuBtn" title="Conversations">☰</button><div id="avatar" class="avatar">RF</div><div><strong id="person">Select a conversation</strong><small id="phone">WhatsApp</small></div></div><div class="actions"><button id="botToggle" class="bot-toggle on" disabled><span class="dot"></span><span class="label">Bot: ON</span></button><button title="More">⋯</button><button title="Info">ⓘ</button></div></header>
-<div class="window" id="window">Select a customer to start.</div>
-<section class="messages" id="messages"><div class="empty">No conversation selected</div></section>
-<footer class="composer"><div class="compose"><input id="text" placeholder="Type your message…" disabled><button id="send" class="send" disabled>➤</button></div><div class="hint">Messages are sent through your server-side Meta Cloud API token. Turn the bot off above to reply yourself.</div></footer>
-</main></div>
-<script>
+&lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;div class="app"&gt;
+&lt;aside class="rail"&gt;&lt;div class="logo"&gt;R&lt;/div&gt;&lt;button class="active" title="Chats"&gt;💬&lt;/button&gt;&lt;button title="Contacts"&gt;👤&lt;/button&gt;&lt;button title="Broadcasts"&gt;📣&lt;/button&gt;&lt;button title="Reports"&gt;📊&lt;/button&gt;&lt;div class="push"&gt;&lt;button title="Settings"&gt;⚙️&lt;/button&gt;&lt;/div&gt;&lt;/aside&gt;
+&lt;aside class="list" id="list"&gt;
+&lt;div class="head"&gt;&lt;button class="list-close" id="listClose" title="Close"&gt;✕&lt;/button&gt;&lt;div&gt;&lt;div class="brand"&gt;RAKIBFLOW&lt;/div&gt;&lt;div class="title"&gt;Inbox&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;
+&lt;div class="search-wrap"&gt;&lt;input id="search" class="search" placeholder="Search conversations…"&gt;&lt;/div&gt;
+&lt;div class="tabs"&gt;&lt;button class="tab active"&gt;All&lt;/button&gt;&lt;button class="tab"&gt;Unread&lt;/button&gt;&lt;button class="tab"&gt;Open&lt;/button&gt;&lt;/div&gt;
+&lt;div id="chats"&gt;&lt;div class="empty"&gt;Loading conversations…&lt;/div&gt;&lt;/div&gt;
+&lt;/aside&gt;
+&lt;main class="main"&gt;
+&lt;header class="top"&gt;&lt;div class="person"&gt;&lt;button class="menu-btn" id="menuBtn" title="Conversations"&gt;☰&lt;/button&gt;&lt;div id="avatar" class="avatar"&gt;RF&lt;/div&gt;&lt;div&gt;&lt;strong id="person"&gt;Select a conversation&lt;/strong&gt;&lt;small id="phone"&gt;WhatsApp&lt;/small&gt;&lt;/div&gt;&lt;/div&gt;&lt;div class="actions"&gt;&lt;button id="botToggle" class="bot-toggle on" disabled&gt;&lt;span class="dot"&gt;&lt;/span&gt;&lt;span class="label"&gt;Bot: ON&lt;/span&gt;&lt;/button&gt;&lt;button title="More"&gt;⋯&lt;/button&gt;&lt;button title="Info"&gt;ⓘ&lt;/button&gt;&lt;/div&gt;&lt;/header&gt;
+&lt;div class="window" id="window"&gt;Select a customer to start.&lt;/div&gt;
+&lt;section class="messages" id="messages"&gt;&lt;div class="empty"&gt;No conversation selected&lt;/div&gt;&lt;/section&gt;
+&lt;footer class="composer"&gt;&lt;div class="compose"&gt;&lt;input id="text" placeholder="Type your message…" disabled&gt;&lt;button id="send" class="send" disabled&gt;➤&lt;/button&gt;&lt;/div&gt;&lt;div class="hint"&gt;Messages are sent through your server-side Meta Cloud API token. Turn the bot off above to reply yourself.&lt;/div&gt;&lt;/footer&gt;
+&lt;/main&gt;&lt;/div&gt;
+&lt;script&gt;
 let conversations=[], selected=null, lastMsgCount=-1;
-const $=id=>document.getElementById(id);
-const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-function initials(n){return (n||"WA").split(/\s+/).slice(0,2).map(x=>x[0]).join("").toUpperCase()}
+const $=id=&gt;document.getElementById(id);
+const esc=s=&gt;String(s??"").replace(/[&amp;&lt;&gt;"']/g,c=&gt;({"&amp;":"&amp;amp;","&lt;":"&amp;lt;","&gt;":"&amp;gt;",'"':"&amp;quot;","'":"&amp;#39;"}[c]));
+function initials(n){return (n||"WA").split(/\s+/).slice(0,2).map(x=&gt;x[0]).join("").toUpperCase()}
 function time(iso){if(!iso)return "";return new Date(iso).toLocaleString([], {hour:"2-digit",minute:"2-digit"})}
 function tick(status){
- if(status==="read")return '<span class="tick read">✓✓</span>';
- if(status==="delivered")return '<span class="tick">✓✓</span>';
- return '<span class="tick">✓</span>';
+ if(status==="read")return '&lt;span class="tick read"&gt;✓✓&lt;/span&gt;';
+ if(status==="delivered")return '&lt;span class="tick"&gt;✓✓&lt;/span&gt;';
+ return '&lt;span class="tick"&gt;✓&lt;/span&gt;';
 }
 function dashPassword(){
  let p=localStorage.getItem("rf_dash_pw");
@@ -151,25 +151,25 @@ async function api(url,opt={}){
  if(pw) headers["x-dashboard-password"]=pw;
  const r=await fetch(url,{...opt,headers});
  if(r.status===401){localStorage.removeItem("rf_dash_pw");throw new Error("Wrong dashboard password. Refresh the page and try again.")}
- const d=await r.json().catch(()=>({}));
+ const d=await r.json().catch(()=&gt;({}));
  if(!r.ok)throw new Error(d.error||"Request failed");
  return d;
 }
 async function load(){
- try{conversations=await api("/api/conversations");renderChats(); if(!selected && conversations.length) select(conversations[0].id)}
- catch(e){$("chats").innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
+ try{conversations=await api("/api/conversations");renderChats(); if(!selected &amp;&amp; conversations.length) select(conversations[0].id)}
+ catch(e){$("chats").innerHTML='&lt;div class="empty"&gt;'+esc(e.message)+'&lt;/div&gt;'}
 }
 function renderChats(){
  const q=$("search").value.toLowerCase();
- const arr=conversations.filter(c=>(c.name||c.wa_id).toLowerCase().includes(q)||(c.preview||"").toLowerCase().includes(q));
- $("chats").innerHTML=arr.length?arr.map(c=>{
-  const stale=c.last_message_at && Date.now()-new Date(c.last_message_at).getTime()>86400000;
+ const arr=conversations.filter(c=&gt;(c.name||c.wa_id).toLowerCase().includes(q)||(c.preview||"").toLowerCase().includes(q));
+ $("chats").innerHTML=arr.length?arr.map(c=&gt;{
+  const stale=c.last_message_at &amp;&amp; Date.now()-new Date(c.last_message_at).getTime()&gt;86400000;
   const botOn=c.bot_enabled!==false;
-  return `<div class="chat ${selected?.conversation_id===c.conversation_id?"sel":""}" data-id="${c.conversation_id}">
- <div class="avatar">${esc(initials(c.name||c.wa_id))}</div><div class="chatbody"><div class="row"><span class="name">${esc(c.name||c.wa_id)}</span><span class="time">${esc(time(c.last_message_at))}</span></div>
- <div class="preview">${esc(c.preview||"No messages")}</div><div class="status ${stale?"warn":""}">${stale?"Template required":"● 24h window open"}</div><span class="bot-chip ${botOn?"on":"off"}">${botOn?"🤖 Bot":"🧑 Human"}</span></div>${c.unread_count?`<span class="unread-dot">${c.unread_count}</span>`:""}</div>`;
- }).join(""):'<div class="empty">No conversations</div>';
- document.querySelectorAll(".chat").forEach(x=>x.onclick=()=>select(Number(x.dataset.id)));
+  return `&lt;div class="chat ${selected?.conversation_id===c.conversation_id?"sel":""}" data-id="${c.conversation_id}"&gt;
+ &lt;div class="avatar"&gt;${esc(initials(c.name||c.wa_id))}&lt;/div&gt;&lt;div class="chatbody"&gt;&lt;div class="row"&gt;&lt;span class="name"&gt;${esc(c.name||c.wa_id)}&lt;/span&gt;&lt;span class="time"&gt;${esc(time(c.last_message_at))}&lt;/span&gt;&lt;/div&gt;
+ &lt;div class="preview"&gt;${esc(c.preview||"No messages")}&lt;/div&gt;&lt;div class="status ${stale?"warn":""}"&gt;${stale?"Template required":"● 24h window open"}&lt;/div&gt;&lt;span class="bot-chip ${botOn?"on":"off"}"&gt;${botOn?"🤖 Bot":"🧑 Human"}&lt;/span&gt;&lt;/div&gt;${c.unread_count?`&lt;span class="unread-dot"&gt;${c.unread_count}&lt;/span&gt;`:""}&lt;/div&gt;`;
+ }).join(""):'&lt;div class="empty"&gt;No conversations&lt;/div&gt;';
+ document.querySelectorAll(".chat").forEach(x=&gt;x.onclick=()=&gt;select(Number(x.dataset.id)));
 }
 function renderBotToggle(){
  const btn=$("botToggle");
@@ -186,33 +186,33 @@ async function toggleBot(){
  try{
   const res=await api(`/api/conversations/${selected.conversation_id}/bot`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({enabled:next})});
   selected.bot_enabled=res.conversation.bot_enabled;
-  const idx=conversations.findIndex(c=>c.conversation_id===selected.conversation_id);
-  if(idx>-1) conversations[idx].bot_enabled=res.conversation.bot_enabled;
+  const idx=conversations.findIndex(c=&gt;c.conversation_id===selected.conversation_id);
+  if(idx&gt;-1) conversations[idx].bot_enabled=res.conversation.bot_enabled;
   renderBotToggle();renderChats();
  }catch(e){alert(e.message)}
  finally{$("botToggle").disabled=false}
 }
 async function refreshMessages(id,forceRender){
  const msgs=await api(`/api/conversations/${id}/messages`);
- if(!forceRender && msgs.length===lastMsgCount) return;
- const nearBottom=$("messages").scrollHeight-$("messages").scrollTop-$("messages").clientHeight<80;
+ if(!forceRender &amp;&amp; msgs.length===lastMsgCount) return;
+ const nearBottom=$("messages").scrollHeight-$("messages").scrollTop-$("messages").clientHeight&lt;80;
  lastMsgCount=msgs.length;
- $("messages").innerHTML='<div class="day">CONVERSATION</div>'+msgs.map(m=>`<div class="msg ${m.direction==="out"?"out":"in"}">${esc(m.body)}<span class="meta">${esc(time(m.timestamp))}${m.direction==="out"?tick(m.status):""}</span></div>`).join("");
+ $("messages").innerHTML='&lt;div class="day"&gt;CONVERSATION&lt;/div&gt;'+msgs.map(m=&gt;`&lt;div class="msg ${m.direction==="out"?"out":"in"}"&gt;${esc(m.body)}&lt;span class="meta"&gt;${esc(time(m.timestamp))}${m.direction==="out"?tick(m.status):""}&lt;/span&gt;&lt;/div&gt;`).join("");
  if(forceRender||nearBottom) $("messages").scrollTop=$("messages").scrollHeight;
 }
 async function select(id){
- selected=conversations.find(c=>c.conversation_id===id); if(!selected)return; renderChats();
+ selected=conversations.find(c=&gt;c.conversation_id===id); if(!selected)return; renderChats();
  $("list").classList.remove("open");
  $("person").textContent=selected.name||selected.wa_id;$("phone").textContent="WhatsApp · "+selected.wa_id;$("avatar").textContent=initials(selected.name||selected.wa_id);
  const age=selected.last_message_at?Date.now()-new Date(selected.last_message_at).getTime():0;
- const stale=age>86400000;
+ const stale=age&gt;86400000;
  $("window").className="window"+(stale?" warn":"");
- $("window").innerHTML=stale?`Customer last message: <b>${esc(time(selected.last_message_at))}</b> · Template required`:`Customer last message: <b>${esc(time(selected.last_message_at))}</b> · Free-form reply window is open`;
+ $("window").innerHTML=stale?`Customer last message: &lt;b&gt;${esc(time(selected.last_message_at))}&lt;/b&gt; · Template required`:`Customer last message: &lt;b&gt;${esc(time(selected.last_message_at))}&lt;/b&gt; · Free-form reply window is open`;
  $("text").disabled=false;$("send").disabled=false;
  renderBotToggle();
  lastMsgCount=-1;
  try{await refreshMessages(id,true);load()}
- catch(e){$("messages").innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
+ catch(e){$("messages").innerHTML='&lt;div class="empty"&gt;'+esc(e.message)+'&lt;/div&gt;'}
 }
 async function send(){
  const text=$("text").value.trim();if(!text||!selected)return;
@@ -221,11 +221,11 @@ async function send(){
  catch(e){alert(e.message)}
  finally{$("send").disabled=false}
 }
-$("send").onclick=send;$("text").onkeydown=e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}};$("search").oninput=renderChats;
-$("menuBtn").onclick=()=>$("list").classList.add("open");
-$("listClose").onclick=()=>$("list").classList.remove("open");
+$("send").onclick=send;$("text").onkeydown=e=&gt;{if(e.key==="Enter"&amp;&amp;!e.shiftKey){e.preventDefault();send()}};$("search").oninput=renderChats;
+$("menuBtn").onclick=()=&gt;$("list").classList.add("open");
+$("listClose").onclick=()=&gt;$("list").classList.remove("open");
 $("botToggle").onclick=toggleBot;
 load();
-setInterval(()=>{load(); if(selected) refreshMessages(selected.conversation_id,false).catch(()=>{});},1500);
-</script>
-</body></html>
+setInterval(()=&gt;{load(); if(selected) refreshMessages(selected.conversation_id,false).catch(()=&gt;{});},1500);
+&lt;/script&gt;
+&lt;/body&gt;&lt;/html&gt;
