@@ -92,6 +92,14 @@ button,input,textarea{font:inherit}
 .send:disabled{background:#c8cdd1;cursor:default}
 .hint{font-size:9.5px;color:var(--muted2);margin-top:6px;text-align:center}
 .empty{color:var(--muted2);text-align:center;margin:auto;font-size:13px}
+.attach{width:42px;height:42px;flex:none;border:0;border-radius:50%;background:transparent;color:var(--muted2);font-size:19px;cursor:pointer;display:grid;place-items:center;transition:background .15s}
+.attach:hover{background:var(--bg-app)}
+.attach:disabled{opacity:.4;cursor:default}
+.msg img.media,.msg video.media{max-width:260px;border-radius:8px;display:block;margin-bottom:4px}
+.msg audio.media{max-width:240px;display:block;margin-bottom:4px}
+.msg a.doc-media{display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.04);padding:8px 10px;border-radius:8px;color:inherit;text-decoration:none;margin-bottom:4px;font-size:13px}
+.tpl-btn{background:var(--warn);color:#fff;border:0;border-radius:999px;padding:3px 10px;font-size:10.5px;font-weight:700;cursor:pointer;margin-left:8px}
+.tpl-btn:hover{opacity:.9}
 
 .menu-btn{display:none;background:transparent;border:0;color:var(--muted2);font-size:18px;border-radius:9px;padding:8px;cursor:pointer;margin-right:4px}
 .menu-btn:hover{background:var(--bg-app);color:var(--teal-deep)}
@@ -127,7 +135,7 @@ button,input,textarea{font:inherit}
 <header class="top"><div class="person"><button class="menu-btn" id="menuBtn" title="Back">←</button><div id="avatar" class="avatar">RF</div><div><strong id="person">Select a conversation</strong><small id="phone">WhatsApp</small></div></div><div class="actions"><button id="botToggle" class="bot-toggle on" disabled><span class="dot"></span><span class="label">Bot: ON</span></button><button title="More">⋯</button><button title="Info">ⓘ</button></div></header>
 <div class="window" id="window">Select a customer to start.</div>
 <section class="messages" id="messages"><div class="empty">No conversation selected</div></section>
-<footer class="composer"><div class="compose"><input id="text" placeholder="Type your message…" disabled><button id="send" class="send" disabled>➤</button></div><div class="hint">Messages are sent through your server-side Meta Cloud API token. Turn the bot off above to reply yourself.</div></footer>
+<footer class="composer"><div class="compose"><button id="attachBtn" class="attach" disabled title="Attach image/video/audio/document">📎</button><input type="file" id="fileInput" style="display:none" accept="image/*,video/*,audio/*,.pdf,.doc,.docx"><input id="text" placeholder="Type your message…" disabled><button id="send" class="send" disabled>➤</button></div><div class="hint">Messages are sent through your server-side Meta Cloud API token. Turn the bot off above to reply yourself.</div></footer>
 </main></div>
 <script>
 let conversations=[], selected=null, lastMsgCount=-1;
@@ -192,12 +200,21 @@ async function toggleBot(){
  }catch(e){alert(e.message)}
  finally{$("botToggle").disabled=false}
 }
+function mediaUrl(mediaId){return `/api/media/${mediaId}?password=${encodeURIComponent(dashPassword())}`}
+function renderMsgBody(m){
+ const cap = m.body && !/^\[(image|video|audio|document)\]$/.test(m.body) ? `<div>${esc(m.body)}</div>` : "";
+ if(m.type==="image" && m.media_id) return `<img class="media" src="${mediaUrl(m.media_id)}" loading="lazy">${cap}`;
+ if(m.type==="video" && m.media_id) return `<video class="media" controls src="${mediaUrl(m.media_id)}"></video>${cap}`;
+ if(m.type==="audio" && m.media_id) return `<audio class="media" controls src="${mediaUrl(m.media_id)}"></audio>${cap}`;
+ if(m.type==="document" && m.media_id) return `<a class="doc-media" href="${mediaUrl(m.media_id)}" target="_blank" rel="noopener">📄 ${esc(m.body||"Document")}</a>`;
+ return esc(m.body);
+}
 async function refreshMessages(id,forceRender){
  const msgs=await api(`/api/conversations/${id}/messages`);
  if(!forceRender && msgs.length===lastMsgCount) return;
  const nearBottom=$("messages").scrollHeight-$("messages").scrollTop-$("messages").clientHeight<80;
  lastMsgCount=msgs.length;
- $("messages").innerHTML='<div class="day">CONVERSATION</div>'+msgs.map(m=>`<div class="msg ${m.direction==="out"?"out":"in"}">${esc(m.body)}<span class="meta">${esc(time(m.timestamp))}${m.direction==="out"?tick(m.status):""}</span></div>`).join("");
+ $("messages").innerHTML='<div class="day">CONVERSATION</div>'+msgs.map(m=>`<div class="msg ${m.direction==="out"?"out":"in"}">${renderMsgBody(m)}<span class="meta">${esc(time(m.timestamp))}${m.direction==="out"?tick(m.status):""}</span></div>`).join("");
  if(forceRender||nearBottom) $("messages").scrollTop=$("messages").scrollHeight;
 }
 async function select(id){
@@ -208,8 +225,9 @@ async function select(id){
  const age=selected.last_message_at?Date.now()-new Date(selected.last_message_at).getTime():0;
  const stale=age>86400000;
  $("window").className="window"+(stale?" warn":"");
- $("window").innerHTML=stale?`Customer last message: <b>${esc(time(selected.last_message_at))}</b> · Template required`:`Customer last message: <b>${esc(time(selected.last_message_at))}</b> · Free-form reply window is open`;
- $("text").disabled=false;$("send").disabled=false;
+ $("window").innerHTML=stale?`Customer last message: <b>${esc(time(selected.last_message_at))}</b> · Template required<button id="templateBtn" class="tpl-btn">Send Template</button>`:`Customer last message: <b>${esc(time(selected.last_message_at))}</b> · Free-form reply window is open`;
+ const tb=document.getElementById("templateBtn"); if(tb) tb.onclick=sendTemplateFlow;
+ $("text").disabled=false;$("send").disabled=false;$("attachBtn").disabled=false;
  renderBotToggle();
  lastMsgCount=-1;
  try{await refreshMessages(id,true);load()}
@@ -222,10 +240,44 @@ async function send(){
  catch(e){alert(e.message)}
  finally{$("send").disabled=false}
 }
+function fileToBase64(file){
+ return new Promise((resolve,reject)=>{
+  const r=new FileReader();
+  r.onload=()=>resolve(String(r.result).split(",")[1]);
+  r.onerror=()=>reject(new Error("Could not read file"));
+  r.readAsDataURL(file);
+ });
+}
+async function uploadMedia(file){
+ if(!selected||!file)return;
+ if(file.size>15*1024*1024){alert("File too large (max 15MB)");return}
+ $("attachBtn").disabled=true;$("send").disabled=true;
+ try{
+  const base64=await fileToBase64(file);
+  let caption=null;
+  if(file.type.startsWith("image/")||file.type.startsWith("video/")) caption=prompt("Caption (optional):","")||null;
+  await api("/api/send/media",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({conversationId:selected.conversation_id,mediaBase64:base64,mimeType:file.type||"application/octet-stream",fileName:file.name,caption})});
+  await refreshMessages(selected.conversation_id,true);
+ }catch(e){alert(e.message)}
+ finally{$("attachBtn").disabled=false;$("send").disabled=false;$("fileInput").value=""}
+}
+async function sendTemplateFlow(){
+ if(!selected)return;
+ const name=prompt("Approved template name (Meta):","hello_world"); if(!name)return;
+ const lang=prompt("Language code:","en_US")||"en_US";
+ const varsRaw=prompt("Body variables, comma separated (leave blank if none):","");
+ const components=varsRaw&&varsRaw.trim()?[{type:"body",parameters:varsRaw.split(",").map(v=>({type:"text",text:v.trim()}))}]:[];
+ try{
+  await api("/api/send/template",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({conversationId:selected.conversation_id,name,languageCode:lang,components})});
+  await refreshMessages(selected.conversation_id,true);
+ }catch(e){alert(e.message)}
+}
 $("send").onclick=send;$("text").onkeydown=e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}};$("search").oninput=renderChats;
 $("menuBtn").onclick=()=>document.querySelector(".app").classList.remove("chat-open");
 $("listClose").onclick=()=>$("list").classList.remove("open");
 $("botToggle").onclick=toggleBot;
+$("attachBtn").onclick=()=>$("fileInput").click();
+$("fileInput").onchange=()=>{const f=$("fileInput").files[0]; if(f) uploadMedia(f)};
 load();
 setInterval(()=>{load(); if(selected) refreshMessages(selected.conversation_id,false).catch(()=>{});},1500);
 </script>
