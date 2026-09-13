@@ -130,7 +130,7 @@ button,input,textarea{font:inherit}
 <footer class="composer"><div class="compose"><input id="text" placeholder="Type your message…" disabled><button id="send" class="send" disabled>➤</button></div><div class="hint">Messages are sent through your server-side Meta Cloud API token. Turn the bot off above to reply yourself.</div></footer>
 </main></div>
 <script>
-let conversations=[], selected=null;
+let conversations=[], selected=null, lastMsgCount=-1;
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 function initials(n){return (n||"WA").split(/\s+/).slice(0,2).map(x=>x[0]).join("").toUpperCase()}
@@ -192,6 +192,14 @@ async function toggleBot(){
  }catch(e){alert(e.message)}
  finally{$("botToggle").disabled=false}
 }
+async function refreshMessages(id,forceRender){
+ const msgs=await api(`/api/conversations/${id}/messages`);
+ if(!forceRender && msgs.length===lastMsgCount) return;
+ const nearBottom=$("messages").scrollHeight-$("messages").scrollTop-$("messages").clientHeight<80;
+ lastMsgCount=msgs.length;
+ $("messages").innerHTML='<div class="day">CONVERSATION</div>'+msgs.map(m=>`<div class="msg ${m.direction==="out"?"out":"in"}">${esc(m.body)}<span class="meta">${esc(time(m.timestamp))}${m.direction==="out"?tick(m.status):""}</span></div>`).join("");
+ if(forceRender||nearBottom) $("messages").scrollTop=$("messages").scrollHeight;
+}
 async function select(id){
  selected=conversations.find(c=>c.conversation_id===id); if(!selected)return; renderChats();
  $("list").classList.remove("open");
@@ -202,13 +210,14 @@ async function select(id){
  $("window").innerHTML=stale?`Customer last message: <b>${esc(time(selected.last_message_at))}</b> · Template required`:`Customer last message: <b>${esc(time(selected.last_message_at))}</b> · Free-form reply window is open`;
  $("text").disabled=false;$("send").disabled=false;
  renderBotToggle();
- try{const msgs=await api(`/api/conversations/${id}/messages`);$("messages").innerHTML='<div class="day">CONVERSATION</div>'+msgs.map(m=>`<div class="msg ${m.direction==="out"?"out":"in"}">${esc(m.body)}<span class="meta">${esc(time(m.timestamp))}${m.direction==="out"?tick(m.status):""}</span></div>`).join("");$("messages").scrollTop=$("messages").scrollHeight;load()}
+ lastMsgCount=-1;
+ try{await refreshMessages(id,true);load()}
  catch(e){$("messages").innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
 }
 async function send(){
  const text=$("text").value.trim();if(!text||!selected)return;
  $("send").disabled=true;
- try{await api("/api/send/text",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({conversationId:selected.conversation_id,text})});$("text").value="";await select(selected.conversation_id)}
+ try{await api("/api/send/text",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({conversationId:selected.conversation_id,text})});$("text").value="";await refreshMessages(selected.conversation_id,true)}
  catch(e){alert(e.message)}
  finally{$("send").disabled=false}
 }
@@ -216,6 +225,7 @@ $("send").onclick=send;$("text").onkeydown=e=>{if(e.key==="Enter"&&!e.shiftKey){
 $("menuBtn").onclick=()=>$("list").classList.add("open");
 $("listClose").onclick=()=>$("list").classList.remove("open");
 $("botToggle").onclick=toggleBot;
-load();setInterval(load,5000);
+load();
+setInterval(()=>{load(); if(selected) refreshMessages(selected.conversation_id,false).catch(()=>{});},1500);
 </script>
 </body></html>
