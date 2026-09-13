@@ -101,11 +101,11 @@ button,input,textarea{font:inherit}
 @media(max-width:650px){
  .app{grid-template-columns:1fr}
  .rail{display:none}
- .list{display:none}
- .list.open{display:flex;position:fixed;inset:0;z-index:20;width:100%;grid-column:1}
- .main{grid-column:1}
+ .list{display:flex;grid-column:1;width:100%}
+ .main{display:none;grid-column:1}
+ .app.chat-open .list{display:none}
+ .app.chat-open .main{display:flex}
  .menu-btn{display:inline-flex;align-items:center;justify-content:center}
- .list-close{display:inline-flex;align-items:center;justify-content:center;background:transparent;border:0;color:var(--muted2);font-size:20px;border-radius:9px;padding:6px 10px;cursor:pointer;margin-right:6px}
  .head{display:flex;align-items:center;gap:10px}
  .top{padding:0 14px}
  .bot-toggle span.label{display:none}
@@ -124,7 +124,7 @@ button,input,textarea{font:inherit}
 <div id="chats"><div class="empty">Loading conversations…</div></div>
 </aside>
 <main class="main">
-<header class="top"><div class="person"><button class="menu-btn" id="menuBtn" title="Conversations">☰</button><div id="avatar" class="avatar">RF</div><div><strong id="person">Select a conversation</strong><small id="phone">WhatsApp</small></div></div><div class="actions"><button id="botToggle" class="bot-toggle on" disabled><span class="dot"></span><span class="label">Bot: ON</span></button><button title="More">⋯</button><button title="Info">ⓘ</button></div></header>
+<header class="top"><div class="person"><button class="menu-btn" id="menuBtn" title="Back">←</button><div id="avatar" class="avatar">RF</div><div><strong id="person">Select a conversation</strong><small id="phone">WhatsApp</small></div></div><div class="actions"><button id="botToggle" class="bot-toggle on" disabled><span class="dot"></span><span class="label">Bot: ON</span></button><button title="More">⋯</button><button title="Info">ⓘ</button></div></header>
 <div class="window" id="window">Select a customer to start.</div>
 <section class="messages" id="messages"><div class="empty">No conversation selected</div></section>
 <footer class="composer"><div class="compose"><input id="text" placeholder="Type your message…" disabled><button id="send" class="send" disabled>➤</button></div><div class="hint">Messages are sent through your server-side Meta Cloud API token. Turn the bot off above to reply yourself.</div></footer>
@@ -156,7 +156,7 @@ async function api(url,opt={}){
  return d;
 }
 async function load(){
- try{conversations=await api("/api/conversations");renderChats(); if(!selected && conversations.length) select(conversations[0].id)}
+ try{conversations=await api("/api/conversations");renderChats(); if(!selected && conversations.length && window.innerWidth>650) select(conversations[0].id)}
  catch(e){$("chats").innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
 }
 function renderChats(){
@@ -203,6 +203,7 @@ async function refreshMessages(id,forceRender){
 async function select(id){
  selected=conversations.find(c=>c.conversation_id===id); if(!selected)return; renderChats();
  $("list").classList.remove("open");
+ document.querySelector(".app").classList.add("chat-open");
  $("person").textContent=selected.name||selected.wa_id;$("phone").textContent="WhatsApp · "+selected.wa_id;$("avatar").textContent=initials(selected.name||selected.wa_id);
  const age=selected.last_message_at?Date.now()-new Date(selected.last_message_at).getTime():0;
  const stale=age>86400000;
@@ -222,7 +223,7 @@ async function send(){
  finally{$("send").disabled=false}
 }
 $("send").onclick=send;$("text").onkeydown=e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}};$("search").oninput=renderChats;
-$("menuBtn").onclick=()=>$("list").classList.add("open");
+$("menuBtn").onclick=()=>document.querySelector(".app").classList.remove("chat-open");
 $("listClose").onclick=()=>$("list").classList.remove("open");
 $("botToggle").onclick=toggleBot;
 load();
