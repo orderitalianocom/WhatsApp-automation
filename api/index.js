@@ -13,7 +13,7 @@ const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
 });
 
 const app = express();
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "15mb" }));
 
 const now = () => new Date().toISOString();
 
@@ -101,6 +101,39 @@ async function graphSend(payload) {
     throw err;
   }
   return data;
+}
+
+// Uploads a base64-encoded file to Meta and returns the resulting media id,
+// which can then be referenced in an image/video/audio/document send call.
+async function graphUploadMedia({ base64, mimeType, filename }) {
+  if (!env.WHATSAPP_ACCESS_TOKEN || !env.PHONE_NUMBER_ID)
+    throw new Error("WHATSAPP_ACCESS_TOKEN and PHONE_NUMBER_ID are not configured");
+  const buffer = Buffer.from(base64, "base64");
+  const blob = new Blob([buffer], { type: mimeType });
+  const form = new FormData();
+  form.append("file", blob, filename || "upload");
+  form.append("type", mimeType);
+  form.append("messaging_product", "whatsapp");
+  const url = `https://graph.facebook.com/${env.GRAPH_VERSION || "v23.0"}/${env.PHONE_NUMBER_ID}/media`;
+  const r = await fetch(url, {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${env.WHATSAPP_ACCESS_TOKEN}` },
+    body: form
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const err = new Error(data?.error?.message || "Meta media upload failed");
+    err.status = r.status; err.meta = data;
+    throw err;
+  }
+  return data.id;
+}
+
+function mediaKindFromMime(mime = "") {
+  if (mime.startsWith("image/")) return "image";
+  if (mime.startsWith("video/")) return "video";
+  if (mime.startsWith("audio/")) return "audio";
+  return "document";
 }
 
 /* Webhook verification */
@@ -228,6 +261,43 @@ app.post("/api/send/text", dashboardAuth, async (req, res) => {
   }
 });
 
+// Sends an image / video / audio / document. The file arrives as a base64
+// string (data URL payload without the "data:...;base64," prefix) from the
+// dashboard's file picker; it's uploaded to Meta first, then referenced by
+// media id in the actual send call.
+app.post("/api/send/media", dashboardAuth, async (req, res) => {
+  try {
+    const { conversationId, mediaBase64, mimeType, fileName, caption } = req.body;
+    if (!conversationId || !mediaBase64 || !mimeType)
+      return res.status(400).json({ error: "conversationId, mediaBase64 and mimeType are required" });
+    const { data: conv } = await supabase
+      .from("conversations")
+      .select("*, contacts!inner(wa_id)")
+      .eq("id", conversationId).maybeSingle();
+    if (!conv) return res.status(404).json({ error: "Conversation not found" });
+
+    const kind = mediaKindFromMime(mimeType);
+    const mediaId = await graphUploadMedia({ base64: mediaBase64, mimeType, filename: fileName });
+
+    const payload = { to: conv.contacts.wa_id, type: kind };
+    payload[kind] = kind === "document"
+      ? { id: mediaId, caption: caption || undefined, filename: fileName || undefined }
+      : { id: mediaId, caption: caption || undefined };
+
+    const data = await graphSend(payload);
+    const waMessageId = data?.messages?.[0]?.id || null;
+    await saveMessage({
+      conversationId, waMessageId, direction: "out", type: kind,
+      body: caption || `[${kind}]`, mediaId, status: "sent", timestamp: now(), raw: data
+    });
+    await supabase.from("conversations").update({ last_message_at: now(), bot_enabled: false }).eq("id", conversationId);
+    res.json({ ok: true, data, mediaId });
+  } catch (e) {
+    console.error(e);
+    res.status(e.status || 500).json({ error: e.message, meta: e.meta || null });
+  }
+});
+
 app.post("/api/send/template", dashboardAuth, async (req, res) => {
   try {
     const { conversationId, name, languageCode = "en_US", components = [] } = req.body;
@@ -248,6 +318,31 @@ app.post("/api/send/template", dashboardAuth, async (req, res) => {
     await supabase.from("conversations").update({ last_message_at: now() }).eq("id", conversationId);
     res.json({ ok: true, data });
   } catch (e) { res.status(e.status || 500).json({ error: e.message, meta: e.meta || null }); }
+});
+
+// Proxies a WhatsApp media file so the dashboard can render actual
+// image/video/audio previews. Meta's media URLs require the bearer token
+// and expire quickly, so the browser can never hit them directly — this
+// route resolves the id to a fresh URL and streams the bytes back through
+// our own server instead.
+app.get("/api/media/:mediaId", dashboardAuth, async (req, res) => {
+  try {
+    if (!env.WHATSAPP_ACCESS_TOKEN) return res.status(500).json({ error: "WHATSAPP_ACCESS_TOKEN is not configured" });
+    const metaUrl = `https://graph.facebook.com/${env.GRAPH_VERSION || "v23.0"}/${req.params.mediaId}`;
+    const metaRes = await fetch(metaUrl, { headers: { "Authorization": `Bearer ${env.WHATSAPP_ACCESS_TOKEN}` } });
+    const metaData = await metaRes.json().catch(() => ({}));
+    if (!metaRes.ok || !metaData.url) return res.status(404).json({ error: "Media not found or expired" });
+
+    const fileRes = await fetch(metaData.url, { headers: { "Authorization": `Bearer ${env.WHATSAPP_ACCESS_TOKEN}` } });
+    if (!fileRes.ok) return res.status(502).json({ error: "Failed to fetch media from Meta" });
+    res.set("Content-Type", metaData.mime_type || fileRes.headers.get("content-type") || "application/octet-stream");
+    res.set("Cache-Control", "private, max-age=3600");
+    const buf = Buffer.from(await fileRes.arrayBuffer());
+    res.send(buf);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // Optional convenience endpoint if n8n prefers routing sends through this
